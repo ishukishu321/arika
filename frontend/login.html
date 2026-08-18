@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arika — Log in</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #121212;
+      color: #e0e0e0;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      width: 90%;
+      max-width: 380px;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 20px;
+      padding: 30px;
+      box-sizing: border-box;
+    }
+    .title {
+      text-align: center;
+      font-size: 26px;
+      font-weight: bold;
+      color: #bb86fc;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+    .tabs {
+      display: flex;
+      border: 1px solid #444;
+      border-radius: 30px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 10px;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 14px;
+    }
+    .tab.active { background: #bb86fc; color: #121212; font-weight: bold; }
+    label {
+      display: block;
+      font-size: 13px;
+      color: #aaa;
+      margin: 14px 0 6px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #262626;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    #error-msg {
+      color: #cf6679;
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 16px;
+    }
+    #submit-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 30px;
+      border: none;
+      background: #bb86fc;
+      color: #121212;
+      font-weight: bold;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    #submit-btn:hover { opacity: 0.9; }
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 20px 0;
+      color: #555;
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #333;
+    }
+    #guest-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 30px;
+      border: 1px solid #03dac6;
+      background: transparent;
+      color: #03dac6;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #guest-btn:hover { background: rgba(3, 218, 198, 0.1); }
+    .guest-note {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">arika</div>
+    <div class="subtitle">Log in to continue your conversations</div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-login">Log in</div>
+      <div class="tab" id="tab-register">Create account</div>
+    </div>
+
+    <form id="auth-form">
+      <label for="login_id">Login ID</label>
+      <input type="text" id="login_id" autocomplete="username" placeholder="e.g. ishu" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" required>
+
+      <div id="error-msg"></div>
+      <button type="submit" id="submit-btn">Log in</button>
+    </form>
+
+    <div class="divider">or</div>
+    <button id="guest-btn">Continue as Guest</button>
+    <div class="guest-note">Guest chats aren't saved to any account and can't see anyone else's data.</div>
+  </div>
+
+  <script>
+    const tabLogin = document.getElementById("tab-login");
+    const tabRegister = document.getElementById("tab-register");
+    const submitBtn = document.getElementById("submit-btn");
+    const form = document.getElementById("auth-form");
+    const errorMsg = document.getElementById("error-msg");
+    let mode = "login";
+
+    function setMode(newMode) {
+      mode = newMode;
+      tabLogin.classList.toggle("active", mode === "login");
+      tabRegister.classList.toggle("active", mode === "register");
+      submitBtn.innerText = mode === "login" ? "Log in" : "Create account";
+      document.getElementById("password").autocomplete = mode === "login" ? "current-password" : "new-password";
+      errorMsg.innerText = "";
+    }
+    tabLogin.addEventListener("click", () => setMode("login"));
+    tabRegister.addEventListener("click", () => setMode("register"));
+
+    async function postJSON(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      return { ok: res.ok, data };
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorMsg.innerText = "";
+      const login_id = document.getElementById("login_id").value.trim();
+      const password = document.getElementById("password").value;
+
+      const url = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const { ok, data } = await postJSON(url, { login_id, password });
+
+      if (!ok) {
+        errorMsg.innerText = data.message || "Something went wrong.";
+        return;
+      }
+      window.location.href = "/";
+    });
+
+    document.getElementById("guest-btn").addEventListener("click", async () => {
+      errorMsg.innerText = "";
+      const { ok, data } = await postJSON("/api/auth/guest", {});
+      if (!ok) {
+        errorMsg.innerText = data.message || "Couldn't start guest mode.";
+        return;
+      }
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+Drop your VRoid-exported .vrm file in this folder and rename it to: arika.vrm
+(index.html loads it from /static/avatar/arika.vrm)

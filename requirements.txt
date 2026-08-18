@@ -1,0 +1,22 @@
+flask
+requests           # backend/minecraft_manager.py <-> minecraft_bot/bot.js local HTTP bridge
+edge-tts
+google-genai
+Werkzeug
+fastembed          # semantic (RAG) long-term memory search — ONNX-based, no torch
+pyautogui
+pillow
+psutil
+pyperclip
+screen-brightness-control
+pywhatkit
+send2trash
+pygetwindow
+selenium          # browser_control (browser_open/click/type/scroll/get_text)
+webdriver-manager # auto-downloads matching chromedriver for selenium
+
+# --- optional, only needed for specific newer automation actions ---
+opencv-python   # webcam_photo
+pycaw           # mic_mute (Windows only)
+comtypes        # mic_mute (Windows only)
+win10toast      # optional toast popup for set_reminder (Windows only; console print always works without it)

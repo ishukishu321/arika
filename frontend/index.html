@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arika AI - Dark UI</title>
+    <!-- Fonts: Dancing Script for Arika, Poppins for UI -->
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <!-- 3D Avatar Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+            }
+        }
+    </script>
+    <style>
+        /* Base Reset */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { height: 100vh; height: 100dvh; overflow: hidden; background: #09090b; display: flex; color: #e2e8f0; }
+        
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 280px; height: 100vh; height: 100dvh; background: #121214; 
+            border-right: 1px solid #27272a; position: fixed; left: 0; top: 0;
+            display: flex; flex-direction: column; padding: 20px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100;
+        }
+        .sidebar.collapsed { transform: translateX(-100%); }
+        .brand-name {
+            font-family: 'Dancing Script', cursive; font-size: 3.2rem; color: #a78bfa; 
+            text-align: center; margin-bottom: 20px; letter-spacing: 2px;
+        }
+        .nav-items { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; }
+        .nav-item {
+            padding: 12px 15px; background: #18181b; border: 1px solid #27272a;
+            border-radius: 8px; color: #a1a1aa; cursor: pointer;
+            transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; font-size: 0.95rem;
+        }
+        .nav-item:hover { background: #27272a; color: #f4f4f5; }
+        
+        /* History Box styling */
+        .history-container {
+            flex-grow: 1; display: flex; flex-direction: column;
+            background: #09090b; border: 1px solid #27272a; border-radius: 8px; overflow: hidden;
+        }
+        .history-title {
+            padding: 10px 15px; background: #18181b; color: #a1a1aa;
+            font-size: 0.85rem; font-weight: 600; border-bottom: 1px solid #27272a;
+        }
+        #history-list { flex-grow: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .history-item {
+            padding: 10px; background: #18181b; border: 1px solid transparent; border-radius: 6px;
+            font-size: 0.85rem; color: #d6dce4; cursor: pointer; transition: 0.2s;
+        }
+        .history-item:hover { background: #27272a; }
+        .history-item.active { border-color: #a78bfa; background: #27272a; color: white; }
+        .history-item-meta { display: block; font-size: 0.7rem; color: #71717a; margin-top: 4px; }
+        .history-empty { text-align: center; color: #71717a; font-size: 0.85rem; padding: 15px; }
+        .bottom-section { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .user-id {
+            color: #71717a; font-size: 0.85rem; text-align: center;
+            background: #09090b; padding: 10px; border-radius: 8px; border: 1px solid #27272a;
+        }
+        .logout-btn {
+            background: #9f1239; border: none; padding: 10px; border-radius: 8px;
+            color: white; font-weight: 600; cursor: pointer; transition: 0.2s;
+        }
+        .logout-btn:hover { background: #be123c; }
+
+        /* --- MAIN LAYOUT --- */
+        .main-wrapper {
+            flex-grow: 1; margin-left: 280px; position: relative; display: flex;
+            width: calc(100% - 280px); transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+        .sidebar.collapsed ~ .main-wrapper { margin-left: 0; width: 100%; }
+        .toggle-btn {
+            position: absolute; top: 20px; left: 20px; z-index: 101; background: #18181b;
+            border: 1px solid #27272a; border-radius: 8px; padding: 8px 14px;
+            color: #a1a1aa; cursor: pointer; font-size: 1.2rem; transition: 0.2s;
+        }
+        .toggle-btn:hover { color: white; background: #27272a; }
+
+        /* --- CENTER 3D AVATAR --- */
+        .center-area { flex: 1; display: flex; justify-content: center; align-items: center; position: relative; }
+        #avatar-canvas { width: 100%; height: 100%; display: block; outline: none; }
+
+        /* --- RIGHT SIDE CHAT --- */
+        .chat-container-wrapper { width: 450px; height: 100vh; padding: 20px; position: relative; }
+        
+        .collision-background {
+            position: absolute; top: 20px; left: 20px; right: 20px; bottom: 20px;
+            border-radius: 12px; overflow: hidden; z-index: 0; background: #000;
+        }
+        .blob {
+            position: absolute; width: 300px; height: 300px; border-radius: 50%;
+            filter: blur(50px); opacity: 0.4; animation: collide 8s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .blob-1 { background: #4c1d95; top: -50px; left: -50px; }
+        .blob-2 { background: #0f766e; bottom: -50px; right: -50px; animation-delay: -4s; }
+        @keyframes collide { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(60px, 60px) scale(1.1); } }
+        
+        .chat-box {
+            position: relative; z-index: 1; height: 100%; background: rgba(18, 18, 20, 0.90);
+            border: 1px solid #27272a; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            display: flex; flex-direction: column;
+        }
+        .chat-header {
+            padding: 16px; border-bottom: 1px solid #27272a; color: #e2e8f0;
+            font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+            background: #121214; border-radius: 12px 12px 0 0;
+        }
+        #viewing-old-banner {
+            display: none; padding: 10px; background: rgba(255,255,255,0.02);
+            color: #a1a1aa; font-size: 0.8rem; text-align: center; border-bottom: 1px solid #27272a;
+        }
+        #viewing-old-banner.show { display: block; }
+        #viewing-old-banner a { color: #a78bfa; cursor: pointer; text-decoration: underline; margin-left: 6px; }
+        .chat-messages { flex-grow: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        .msg { padding: 12px 16px; border-radius: 12px; max-width: 85%; font-size: 0.9rem; line-height: 1.5; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .msg.arika { background: rgba(99, 102, 241, 0.10); border: 1px solid rgba(129, 140, 248, 0.25); color: #e0e7ff; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .msg.user { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #f4f4f5; align-self: flex-end; border-bottom-right-radius: 4px; }
+        
+        .chat-input-area {
+            padding: 15px; display: flex; flex-wrap: wrap; gap: 10px;
+            border-top: 1px solid #27272a; background: #121214; border-radius: 0 0 12px 12px; position: relative;
+        }
+        .input-row { display: flex; width: 100%; gap: 10px; }
+        .input-row input {
+            flex-grow: 1; background: #09090b; border: 1px solid #3f3f46; padding: 12px 15px;
+            border-radius: 8px; color: white; outline: none; transition: border 0.2s;
+        }
+        .input-row input:focus { border-color: #6366f1; }
+        .input-row button {
+            background: #4f46e5; border: none; padding: 0 20px; border-radius: 8px;
+            color: white; font-weight: 600; cursor: pointer; transition: 0.2s;
+        }
+        .input-row button:hover { background: #4338ca; }
+        .input-row #attach-btn {
+            background: #27272a; border: 1px solid #3f3f46; padding: 0 14px;
+            font-size: 1.1rem; flex-shrink: 0;
+        }
+        .input-row #attach-btn:hover { background: #3f3f46; }
+        
+        #image-preview-row { display: none; align-items: center; gap: 10px; width: 100%; }
+        #image-preview-row.show { display: flex; }
+        #image-preview-row img {
+            width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
+            border: 1px solid #3f3f46;
+        }
+        #image-preview-remove {
+            background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5;
+            border-radius: 6px; cursor: pointer; padding: 4px 10px; font-size: 0.8rem;
+        }
+        #image-preview-remove:hover { background: #9f1239; border-color: #9f1239; }
+        .msg img.chat-image { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; margin-bottom: 6px; object-fit: cover; }
+        
+        .live-audio-btn {
+            width: 100%; background: #27272a; border: 1px solid #3f3f46; color: #e2e8f0;
+            padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s;
+        }
+        .live-audio-btn.active { background: #4c1d95; color: white; border-color: #6d28d9; }
+        #mic-status { width: 100%; text-align: center; font-size: 0.75rem; color: #71717a; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+
+        /* --- SETTINGS MODAL --- */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 2000; }
+        .modal-overlay.open { display: flex; }
+        .modal-box { background: #121214; border: 1px solid #27272a; border-radius: 12px; width: 90%; max-width: 420px; max-height: 85vh; overflow-y: auto; padding: 25px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+        .modal-box h3 { margin-top: 0; color: #e2e8f0; margin-bottom: 15px; border-bottom: 1px solid #27272a; padding-bottom: 10px; }
+        .modal-box label { display: block; font-size: 0.85rem; color: #a1a1aa; margin: 15px 0 5px; }
+        .modal-box input, .modal-box select { width: 100%; background: #09090b; border: 1px solid #3f3f46; color: white; padding: 10px; border-radius: 8px; font-size: 0.9rem; outline: none; }
+        .modal-box input:focus, .modal-box select:focus { border-color: #6366f1; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
+        .modal-actions button { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+        #settings-close { background: #27272a; color: white; }
+        #settings-save { background: #4f46e5; color: white; }
+        
+        /* --- ATTACH MENU STYLING --- */
+        #attach-menu {
+            position: absolute; bottom: 85px; left: 15px; background: #18181b;
+            border: 1px solid #3f3f46; border-radius: 8px; padding: 5px; z-index: 100;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; flex-direction: column;
+        }
+        #attach-menu.show { display: flex; }
+        #attach-menu div {
+            padding: 10px 15px; cursor: pointer; color: #e2e8f0; font-size: 0.9rem; transition: 0.2s;
+        }
+        #attach-menu div:hover { background: #27272a; border-radius: 6px; }
+
+        /* --- TIC TAC TOE WINDOW STYLING --- */
+        #tictactoe-window {
+            position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+            width: 200px; height: 200px; background: #121214; border: 1px solid #6366f1;
+            border-radius: 8px; z-index: 2000; display: none; flex-direction: column;
+            resize: both; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        #tictactoe-window.show { display: flex; transform: none; }
+        #tictactoe-header {
+            background: #27272a; padding: 6px 10px; font-size: 0.85rem; font-weight: 600;
+            cursor: move; display: flex; justify-content: space-between; user-select: none; color: #e2e8f0;
+        }
+        #tictactoe-close { cursor: pointer; color: #f38ba8; }
+        #tictactoe-close:hover { color: #ffb4c8; }
+        #tictactoe-board {
+            flex-grow: 1; display: grid; grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr); gap: 2px; padding: 4px; background: #3f3f46;
+        }
+        .ttc-cell {
+            background: #09090b; display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; font-weight: bold; color: #a78bfa; cursor: pointer;
+        }
+
+        /* --- TASK PLAN (TODO LIST) WIDGET STYLING --- */
+        #plan-window {
+            position: fixed; top: 12%; right: 3%; width: 320px; max-height: 70vh;
+            background: #121214; border: 1px solid #6366f1; border-radius: 10px;
+            z-index: 2000; display: none; flex-direction: column; overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        #plan-window.show { display: flex; }
+        #plan-header {
+            background: #27272a; padding: 10px 14px; font-size: 0.9rem; font-weight: 600;
+            cursor: move; display: flex; justify-content: space-between; align-items: center;
+            user-select: none; color: #e2e8f0;
+        }
+        #plan-close { cursor: pointer; color: #f38ba8; }
+        #plan-close:hover { color: #ffb4c8; }
+        #plan-goal { padding: 10px 14px 0; font-size: 0.8rem; color: #a78bfa; font-weight: 600; }
+        #plan-body { padding: 8px 14px 14px; overflow-y: auto; flex-grow: 1; }
+        #plan-empty { color: #71717a; font-size: 0.85rem; padding: 14px 0; text-align: center; }
+        .plan-step {
+            display: flex; align-items: flex-start; gap: 8px; padding: 7px 0;
+            border-bottom: 1px solid rgba(63,63,70,0.4); font-size: 0.82rem; color: #e2e8f0;
+        }
+        .plan-step:last-child { border-bottom: none; }
+        .plan-step-icon { flex-shrink: 0; font-size: 0.95rem; line-height: 1.3; }
+        .plan-step.pending .plan-step-icon { color: #71717a; }
+        .plan-step.in_progress .plan-step-icon { color: #f5a524; }
+        .plan-step.done .plan-step-icon { color: #4ade80; }
+        .plan-step.failed .plan-step-icon { color: #f38ba8; }
+        .plan-step.needs_input .plan-step-icon { color: #38bdf8; }
+        .plan-step.skipped .plan-step-icon { color: #52525b; }
+        .plan-step.in_progress .plan-step-text { color: #fbbf24; }
+        .plan-step.failed .plan-step-note, .plan-step.needs_input .plan-step-note {
+            display: block; font-size: 0.75rem; color: #a1a1aa; margin-top: 2px;
+        }
+        #plan-cancel-btn {
+            margin: 6px 14px 12px; background: #9f1239; color: white; border: none;
+            border-radius: 6px; padding: 7px 0; font-size: 0.8rem; cursor: pointer;
+        }
+        #plan-cancel-btn:hover { background: #be123c; }
+
+        /* --- MOBILE RESPONSIVE --- */
+        @media (max-width: 768px) {
+            .toggle-btn { top: 14px; left: 14px; padding: 8px 12px; }
+            .sidebar { width: 85%; max-width: 320px; box-shadow: 30px 0 60px rgba(0,0,0,0.6); }
+            .main-wrapper, .sidebar.collapsed ~ .main-wrapper { margin-left: 0; width: 100%; flex-direction: column; }
+            .center-area { width: 100%; height: 100vh; height: 100dvh; }
+            .chat-container-wrapper { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; height: auto; padding: 0 14px; padding-bottom: 14px; z-index: 20; }
+            .collision-background { display: none; }
+            .chat-box { background: transparent; border: none; box-shadow: none; height: auto; }
+            .chat-header { display: none; }
+            .chat-messages { padding: 0 2px 6px; height: 200px; flex-grow: 0; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; justify-content: flex-start; gap: 6px; }
+            .msg, .msg.arika, .msg.user { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+            .msg { max-width: 95%; font-size: 0.88rem; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+            .msg.arika { border: 1px solid rgba(129,140,248,0.35); border-bottom-left-radius: 0; }
+            .msg.user { border: 1px solid rgba(255,255,255,0.15); border-bottom-right-radius: 0; }
+            .chat-input-area { background: rgba(9,9,11,0.65); backdrop-filter: blur(14px); border: 1px solid rgba(63,63,70,0.5); border-top: none; border-radius: 20px; margin-top: 6px; padding: 12px; }
+            .input-row { flex-wrap: nowrap; }
+            .input-row input { background: rgba(0,0,0,0.4); border: none; min-width: 0; }
+            .input-row button { flex-shrink: 0; white-space: nowrap; padding: 0 16px; }
+            .chat-hide-btn {
+                display: flex; position: fixed; top: 14px; right: 14px; z-index: 21;
+                background: rgba(24,24,27,0.8); color: white; border: 1px solid rgba(63,63,70,0.6);
+                border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 0.8rem; cursor: pointer;
+                align-items: center; gap: 6px; backdrop-filter: blur(6px);
+            }
+            .chat-hide-btn:active { background: rgba(39,39,42,0.9); }
+            .chat-container-wrapper.chat-hidden .chat-box { display: none; }
+            
+            #tictactoe-window { width: 150px; height: 150px; top: 10%; }
+            .ttc-cell { font-size: 1.5rem; }
+        }
+        @media (min-width: 769px) { .chat-hide-btn { display: none; } }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="brand-name">Arika</div>
+        <div class="nav-items">
+            <div class="nav-item" id="settings-open-btn">⚙ Settings</div>
+            <div class="nav-item" id="plan-open-btn">✅ Task Plan</div>
+            <div class="nav-item" id="new-chat-btn">➕ New Chat</div>
+        </div>
+        <div class="history-container">
+            <div class="history-title">🕒 Chat History</div>
+            <div id="history-list">
+                <div class="history-empty">Loading history...</div>
+            </div>
+        </div>
+        <div class="bottom-section">
+            <div class="user-id" id="account-badge">
+                {% if is_guest %}Guest{% else %}{{ login_id }}{% endif %}
+            </div>
+            <button class="logout-btn" id="logout-btn">Log Out</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-wrapper" id="mainWrapper">
+        <button class="toggle-btn" id="slider-btn">☰</button>
+        <button class="chat-hide-btn" id="chat-hide-btn">👁 Chat</button>
+        
+        <!-- Center 3D Area -->
+        <div class="center-area">
+            <canvas id="avatar-canvas"></canvas>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="chat-container-wrapper">
+            <div class="collision-background">
+                <div class="blob blob-1"></div>
+                <div class="blob blob-2"></div>
+            </div>
+            <div class="chat-box">
+                <div class="chat-header">
+                    <span id="chat-title">chat title</span>
+                </div>
+                
+                <div id="viewing-old-banner">
+                    Viewing an old chat (read-only). <a id="back-to-current-btn">Back to current</a>
+                    <a id="resume-session-btn">Resume chat</a>
+                </div>
+                <div class="chat-messages" id="chat-window">
+                    {% for msg in conversation %}
+                        <div class="msg user">{{ msg.user }}</div>
+                        <div class="msg arika">{{ msg.arika }}</div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Attach Menu -->
+                <div id="attach-menu">
+                    <div id="menu-send-photo">📷 Send Photos</div>
+                    <div id="menu-tic-tac-toe">🎮 Games / Tic Tac Toe</div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div id="image-preview-row">
+                        <img id="image-preview-thumb" src="" alt="Selected image">
+                        <button id="image-preview-remove" type="button">Remove</button>
+                    </div>
+                    <div class="input-row">
+                        <button id="attach-btn" type="button" title="Attach an image">📎</button>
+                        <input type="file" id="image-input" accept="image/*" style="display:none">
+                        <input type="text" id="user_input" placeholder="Message Arika...">
+                        <button id="send-btn">Send</button>
+                    </div>
+                    <button class="live-audio-btn" id="live-btn" type="button">
+                        <span class="live-audio-label">🎤 Live Audio Mode</span>
+                    </button>
+                    <div id="mic-status"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Task Plan (Todo List) Window -->
+        <div id="plan-window">
+            <div id="plan-header">
+                <span>📋 Arika's Task Plan</span>
+                <span id="plan-close" title="Close">✖</span>
+            </div>
+            <div id="plan-goal"></div>
+            <div id="plan-body">
+                <div id="plan-empty">No active plan right now. Give Arika a multi-step task and she'll write her to-do list here.</div>
+            </div>
+            <button id="plan-cancel-btn" style="display:none;">Cancel this plan</button>
+        </div>
+
+        <!-- Tic Tac Toe Game Window -->
+        <div id="tictactoe-window">
+            <div id="tictactoe-header">
+                <span>Tic Tac Toe vs Arika</span>
+                <span id="tictactoe-close" title="Close">✖</span>
+            </div>
+            <div id="tictactoe-board">
+                <div class="ttc-cell" data-index="0"></div>
+                <div class="ttc-cell" data-index="1"></div>
+                <div class="ttc-cell" data-index="2"></div>
+                <div class="ttc-cell" data-index="3"></div>
+                <div class="ttc-cell" data-index="4"></div>
+                <div class="ttc-cell" data-index="5"></div>
+                <div class="ttc-cell" data-index="6"></div>
+                <div class="ttc-cell" data-index="7"></div>
+                <div class="ttc-cell" data-index="8"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-box">
+            <h3>Settings</h3>
+            <label for="settings-api-key">Gemini API key</label>
+            <input type="password" id="settings-api-key" placeholder="Paste your API key here">
+            <div id="settings-api-key-status" style="font-size: 0.75rem; color: #71717a; margin-top: 5px;"></div>
+            
+            <label for="settings-voice">TTS voice</label>
+            <select id="settings-voice"></select>
+            
+            <label for="settings-model">AI model</label>
+            <select id="settings-model"></select>
+            <div id="settings-model-note" style="font-size: 0.75rem; color: #71717a; margin-top: 5px;"></div>
+            
+            <label for="settings-wake-word">Wake word (leave blank to disable)</label>
+            <input type="text" id="settings-wake-word" placeholder="e.g. arika, or leave blank">
+
+            <label for="settings-show-avatar" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:15px;">
+                <span>Show 3D avatar</span>
+                <input type="checkbox" id="settings-show-avatar" checked>
+            </label>
+
+            <label for="settings-phone-adb-address">Phone adb address (for wireless auto-connect, e.g. 192.168.1.42:5555)</label>
+            <input type="text" id="settings-phone-adb-address" placeholder="e.g. 192.168.1.42:5555, or leave blank">
+
+            <label for="settings-email-address">Email address (for send_email, Gmail only for now)</label>
+            <input type="text" id="settings-email-address" placeholder="you@gmail.com">
+
+            <label for="settings-email-app-password">Email app password (not your normal password — myaccount.google.com/apppasswords)</label>
+            <input type="password" id="settings-email-app-password" placeholder="leave blank to keep current">
+
+            <label for="settings-browser-debug-port">Browser debug port (for browser_control ATTACH MODE — needed for Google sign-in; leave blank for default mode)</label>
+            <input type="text" id="settings-browser-debug-port" placeholder="e.g. 9222, or leave blank">
+
+            <!-- Minecraft Settings Section -->
+            <div style="border-top: 1px solid #3f3f46; margin-top: 20px; padding-top: 20px;">
+                <h4 style="margin: 0 0 15px 0; font-size: 0.9rem; color: #d4d4d8; text-transform: uppercase; letter-spacing: 0.5px;">Minecraft Connection</h4>
+                
+                <label for="settings-minecraft-host">Minecraft server host (localhost for LAN)</label>
+                <input type="text" id="settings-minecraft-host" placeholder="e.g. localhost or 192.168.x.x">
+                
+                <label for="settings-minecraft-port">Minecraft server port</label>
+                <input type="number" id="settings-minecraft-port" placeholder="e.g. 25565" min="1" max="65535">
+                
+                <label for="settings-minecraft-username">Minecraft username</label>
+                <input type="text" id="settings-minecraft-username" placeholder="e.g. Arika">
+                
+                <label for="settings-minecraft-auth">Authentication type</label>
+                <select id="settings-minecraft-auth">
+                    <option value="offline">Offline (TLauncher, cracked servers)</option>
+                    <option value="microsoft">Microsoft (official accounts)</option>
+                </select>
+                <div style="font-size: 0.75rem; color: #71717a; margin-top: 5px;">Use "Offline" for TLauncher servers. Change to "Microsoft" only if using official Minecraft account.</div>
+            </div>
+            
+            <div class="modal-actions">
+                <button id="settings-close">Cancel</button>
+                <button id="settings-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Variables -->
+    <script>
+        window.ARIKA_SETTINGS = {{ settings | tojson }};
+        window.ARIKA_HAS_API_KEY = {{ has_api_key | tojson }};
+    </script>
+    <script>
+        (function () {
+            const wrapper = document.querySelector('.chat-container-wrapper');
+            if (!wrapper) return;
+            function sync() {
+                if (window.innerWidth > 768) return;
+                const h = Math.ceil(wrapper.getBoundingClientRect().height);
+                document.documentElement.style.setProperty('--mobile-chat-h', h + 'px');
+                requestAnimationFrame(() => {
+                    if (window.Avatar && window.Avatar.onResize) window.Avatar.onResize();
+                });
+            }
+            if ('ResizeObserver' in window) {
+                new ResizeObserver(sync).observe(wrapper);
+            }
+            window.addEventListener('resize', sync);
+            window.addEventListener('orientationchange', sync);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', sync);
+            }
+            sync();
+        })();
+    </script>
+
+    <!-- App Logic Scripts -->
+    <script src="{{ url_for('static', filename='js/tts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/stt.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/plan.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+
+    <!-- 3D Avatar Loader -->
+    <script type="module">
+        import "{{ url_for('static', filename='js/avatar.js') }}";
+        const initialAvatarVisible = window.ARIKA_SETTINGS?.show_avatar !== false;
+        Avatar.init('avatar-canvas');
+        Avatar.setVisible(initialAvatarVisible);
+        Avatar.loadVRM("{{ url_for('static', filename='avatar/arika.vrm') }}")
+            .catch((err) => console.error('[avatar] failed to load VRM:', err));
+    </script>
+</body>
+</html>

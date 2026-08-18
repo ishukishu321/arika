@@ -1,0 +1,23 @@
+# --- Secrets / keys (NEVER commit these) ---
+backend/memory/api_key.txt
+backend/memory/flask_secret.key
+
+# --- User & guest data ---
+backend/memory/users/
+backend/memory/guest/
+backend/memory/users.json
+backend/memory/admin.txt
+backend/memory/static_short_term.json
+
+# --- Uploaded / generated content ---
+frontend/static/uploads/
+frontend/static/audio/
+
+# --- Caches / build artifacts ---
+backend/memory/.embedding_model_cache/
+__pycache__/
+*.pyc
+minecraft_bot/node_modules/
+
+# --- Env files if you add one later ---
+.env
