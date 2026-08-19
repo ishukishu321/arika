@@ -120,12 +120,26 @@ https://localhost:5000
 - The assistant keeps the last few exchanges in short-term memory to preserve context.
 - Older chat exchanges are summarized automatically once the short-term buffer reaches the configured threshold.
 - After several summaries are created, Arika generates a consolidated mega summary with tags.
-- When the AI decides to review memory, it issues a `review_mem` command, and the backend searches the current user's long-term archive.
-- If matching memories are found, Arika will answer using the retrieved long-term context.
+- Long-term memory search is **semantic (embedding-based)**, not just tag matching:
+  - Every user message is auto-searched against the long-term archive using
+    vector similarity (`fastembed`, multilingual model — matches Hindi/Hinglish
+    queries against memory content, not just literal keyword overlap).
+  - When the AI explicitly decides to review memory, it issues a `review_mem`
+    command; the backend runs the same semantic search first, falling back to
+    the older tag/keyword matcher only if the embedding backend is unavailable
+    or finds nothing.
+  - If matching memories are found, Arika will answer using the retrieved
+    long-term context.
+- After changing the embedding model (`backend/memory_manager/embeddings.py`),
+  run `python -m scripts.migrate_embeddings --force` once — existing entries'
+  stored vectors are tied to the model that generated them and won't match
+  well against a different model's query vectors otherwise.
 
 ## Notes
 
-- Image upload / send functionality is currently disabled.
+- Image upload is supported: attach an image (PNG/JPEG/WEBP/GIF, max 10MB)
+  alongside a message and Gemini will see it via vision. Uploaded images are
+  saved under `frontend/static/uploads/chat/`.
 - The admin persona is configured so Arika knows the admin identity is `ishu`.
 - Profile data and memory are stored separately for each logged-in user and for guest mode.
 - The Gemini API key is stored in `backend/memory/api_key.txt` and shared across all users.
@@ -145,6 +159,7 @@ https://localhost:5000
 - `flask`
 - `edge-tts`
 - `google-genai`
+- `fastembed` — semantic (RAG) long-term memory search, ONNX-based
 
 ## License
 
