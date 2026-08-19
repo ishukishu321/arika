@@ -46,6 +46,16 @@ It uses:
   - TTS audio generation using the `edge-tts` library
   - Microphone mode prefers silence while the user speaks and resumes after TTS
 
+- **Web search & link reading**
+  - Built-in Google Search grounding — Arika decides on its own when a
+    question needs current/external info and searches automatically
+  - Built-in URL reading — paste a link (e.g. a GitHub repo) in chat and
+    Arika reads the actual page content, not just the title/snippet
+  - Works for both the Admin account and guests (read-only, no automation
+    permissions needed)
+  - Requires a Gemini 3-family model (the default, `gemini-3.1-flash-lite`,
+    and every other model offered in Settings already are)
+
 - **Dark, responsive web UI**
   - Black and grey design
   - Responsive layout for desktop and mobile
@@ -104,6 +114,18 @@ https://localhost:5000
 ```
 
 > The app uses `ssl_context='adhoc'` so the browser can request microphone permissions securely.
+
+> **Note:** the long-term memory feature uses a ~250MB multilingual embedding
+> model (`fastembed`), downloaded once and cached in
+> `backend/memory/.embedding_model_cache/`. Running `installer.py` downloads
+> it during setup (Step 3) so the first chat message isn't slow. If you
+> installed manually via `pip install -r requirements.txt` instead, you can
+> pre-download it the same way with:
+> ```bash
+> python -c "from backend.memory_manager.embeddings import warmup; warmup()"
+> ```
+> Otherwise it just downloads automatically the first time it's needed —
+> a bit slower, but not required.
 
 ## Usage
 

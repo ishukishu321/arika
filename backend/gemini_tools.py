@@ -422,4 +422,21 @@ def build_tools(include_automation: bool, minecraft_active: bool = False) -> lis
         for action, (description, params) in _AUTOMATION_SPEC.items():
             declarations.append(_build_declaration(action, description, params))
 
-    return [types.Tool(function_declarations=declarations)]
+    return [
+        types.Tool(function_declarations=declarations),
+        # Built-in tools, combined with the custom function_declarations
+        # above (Gemini 3 models support mixing built-in + custom tools in
+        # the same request — no separate call needed). Both are read-only
+        # and safe for guests too, so they're not gated by include_automation.
+        #
+        # google_search: general web search grounding — the model decides
+        # on its own when a query needs current/external info and searches
+        # automatically, no explicit tool call from us required.
+        #
+        # url_context: reads the actual content of specific URL(s) the user
+        # or the conversation mentions (e.g. "check this GitHub repo:
+        # <link>", "what does this article say") instead of just searching
+        # for the URL's title/snippet.
+        types.Tool(google_search=types.GoogleSearch()),
+        types.Tool(url_context=types.UrlContext()),
+    ]

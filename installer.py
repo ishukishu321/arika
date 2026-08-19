@@ -102,6 +102,44 @@ def install_requirements():
         root.after(0, lambda: messagebox.showerror("Error", "Failed to install Python dependencies. See the log for details."))
         return False
 
+def download_embedding_model():
+    """Pre-download the multilingual embedding model (used for long-term
+    memory search) NOW, during setup, instead of letting it download lazily
+    on the first chat message or the first migrate_embeddings run — that
+    used to silently block whatever triggered it for a minute or more with
+    no explanation in the UI.
+
+    Runs as a fresh subprocess (not imported directly into this GUI
+    process) so it picks up fastembed etc. that install_requirements() just
+    installed, without any import-caching weirdness in the long-lived
+    installer process.
+    """
+    log("Downloading the AI memory model (multilingual, ~250MB, one-time)... this can take a few minutes depending on your connection.")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from backend.memory_manager.embeddings import warmup; warmup()"],
+            cwd=str(PROJECT_DIR),
+            capture_output=True, text=True, shell=False,
+        )
+        if result.stdout:
+            log(result.stdout.strip())
+        if result.stderr:
+            log(result.stderr.strip())
+        if result.returncode != 0:
+            log("Model download reported errors — see log above. It will "
+                "just download again on first use instead (chat will work, "
+                "that first message will be a bit slower).")
+            return False
+        log("AI memory model ready.")
+        return True
+    except Exception as exc:
+        log(f"Model download step failed: {exc}. It will download again on "
+            f"first use instead — not fatal, just means the first chat "
+            f"message (or first memory search) will be a bit slower.")
+        return False
+
+
 def _command_exists(name):
     from shutil import which
     return which(name) is not None
@@ -272,8 +310,9 @@ step_labels = []
 for i, text in enumerate([
     "Step 1: Create Run Script",
     "Step 2: Install Dependencies",
-    "Step 3: Minecraft Bot Setup",
-    "Step 4: Create Desktop Shortcut",
+    "Step 3: Download AI Memory Model",
+    "Step 4: Minecraft Bot Setup",
+    "Step 5: Create Desktop Shortcut",
 ]):
     lbl = tk.Label(steps_frame, text=f"◯  {text}", font=(FONT_MAIN, 10), fg=FG_NORM, bg=BG_SEC)
     lbl.pack(anchor="w", pady=2)
@@ -325,25 +364,38 @@ def run_automatic_setup():
             else:
                 update_step_ui(1, "✗  Step 2: Dependency Install Failed", FG_ERROR)
 
-            # Step 3 — Minecraft bot setup (Node.js + npm deps + Java/TLauncher check)
-            update_step_ui(2, "●  Step 3: Minecraft Bot Setup... (Node.js + npm packages)", FG_ACCENT)
+            # Step 3 — Pre-download the AI memory model (only if deps installed OK,
+            # since it needs fastembed which was just installed in Step 2)
+            update_step_ui(2, "●  Step 3: Downloading AI Memory Model... (~250MB, one-time)", FG_ACCENT)
+            if success_deps:
+                model_ok = download_embedding_model()
+                if model_ok:
+                    update_step_ui(2, "✓  Step 3: AI Memory Model Ready", FG_SUCCESS)
+                else:
+                    update_step_ui(2, "✗  Step 3: Model Download Failed (will retry on first use)", FG_ERROR)
+            else:
+                log("Skipping AI memory model download — dependencies failed to install.")
+                update_step_ui(2, "✗  Step 3: Skipped (dependencies failed)", FG_ERROR)
+
+            # Step 4 — Minecraft bot setup (Node.js + npm deps + Java/TLauncher check)
+            update_step_ui(3, "●  Step 4: Minecraft Bot Setup... (Node.js + npm packages)", FG_ACCENT)
             node_ok = ensure_node()
             bot_deps_ok = install_minecraft_bot_deps() if node_ok else False
             check_java_and_tlauncher()
             if node_ok and bot_deps_ok:
-                update_step_ui(2, "✓  Step 3: Minecraft Bot Ready", FG_SUCCESS)
+                update_step_ui(3, "✓  Step 4: Minecraft Bot Ready", FG_SUCCESS)
             elif node_ok:
-                update_step_ui(2, "✗  Step 3: Minecraft Bot Deps Failed (see log)", FG_ERROR)
+                update_step_ui(3, "✗  Step 4: Minecraft Bot Deps Failed (see log)", FG_ERROR)
             else:
-                update_step_ui(2, "✗  Step 3: Node.js Missing (install manually)", FG_ERROR)
+                update_step_ui(3, "✗  Step 4: Node.js Missing (install manually)", FG_ERROR)
 
-            # Step 4
-            update_step_ui(3, "●  Step 4: Creating Desktop Shortcut...", FG_ACCENT)
+            # Step 5
+            update_step_ui(4, "●  Step 5: Creating Desktop Shortcut...", FG_ACCENT)
             success_shortcut = create_shortcut()
             if success_shortcut:
-                update_step_ui(3, "✓  Step 4: Desktop Shortcut Created", FG_SUCCESS)
+                update_step_ui(4, "✓  Step 5: Desktop Shortcut Created", FG_SUCCESS)
             else:
-                update_step_ui(3, "✗  Step 4: Shortcut Creation Failed", FG_ERROR)
+                update_step_ui(4, "✗  Step 5: Shortcut Creation Failed", FG_ERROR)
 
             log("\n--- Setup Complete! ---")
             log("If TLauncher wasn't detected, finish installing it from the page "

@@ -5,7 +5,8 @@ Uses fastembed (ONNX runtime backend) instead of sentence-transformers/torch
 to keep RAM + install size low on constrained hardware (i3, 8GB RAM).
 
 Model is loaded ONCE per process (singleton) — loading it per-call would be
-slow and wasteful. First call downloads the model (~90MB) to a local cache
+slow and wasteful. First call downloads the model (~250MB, multilingual model
+is larger than the old English-only one) to a local cache
 folder and keeps it there for future runs (no re-download).
 """
 
@@ -44,13 +45,25 @@ _CACHE_DIR = os.path.join(
 _model = None  # lazy singleton
 
 
+def warmup():
+    """Force-load the embedding model right now (downloading it if needed)
+    instead of waiting for the first real embed_text/embed_texts call.
+
+    Used by installer.py so the ~250MB model download happens once during
+    setup — with the setup window open and the user expecting a wait — 
+    rather than silently blocking the first chat message or the first
+    migrate_embeddings run after install.
+    """
+    _get_model()
+
+
 def _get_model():
     """Load the fastembed model once and reuse it for the lifetime of the process."""
     global _model
     if _model is None:
         from fastembed import TextEmbedding
         os.makedirs(_CACHE_DIR, exist_ok=True)
-        print("[Embeddings] Loading all-MiniLM-L6-v2 (fastembed/ONNX)... first run may download ~90MB")
+        print("[Embeddings] Loading paraphrase-multilingual-MiniLM-L12-v2 (fastembed/ONNX)... first run downloads ~250MB")
         _model = TextEmbedding(model_name=MODEL_NAME, cache_dir=_CACHE_DIR)
         print("[Embeddings] Model ready.")
     return _model
