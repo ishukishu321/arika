@@ -12,8 +12,26 @@ folder and keeps it there for future runs (no re-download).
 import math
 import os
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 EMBED_DIM = 384
+
+# Was: sentence-transformers/all-MiniLM-L6-v2.
+# That model is ENGLISH-ONLY — it was never going to embed Hinglish/Hindi
+# queries close to English-phrased memory content in vector space. That is
+# the real cause of weak/missed matches on Hinglish queries, not the
+# similarity threshold. paraphrase-multilingual-MiniLM-L12-v2 supports 50+
+# languages including Hindi, keeps the same 384-dim output (so existing
+# cosine_similarity/threshold code needs no other changes), and is still
+# small enough to run comfortably via fastembed/ONNX on this hardware.
+#
+# IMPORTANT: changing MODEL_NAME changes the embedding space. Old vectors
+# stored on existing long-term memory entries were computed with the old
+# model and are NOT comparable to new query vectors — they must be
+# regenerated, or every existing memory will silently stop matching (scores
+# will look near-random, not obviously wrong). Re-run
+# scripts/migrate_embeddings.py (or force it to overwrite existing
+# 'embedding' fields, not just fill missing ones) after this change,
+# otherwise old entries just quietly go dark instead of matching worse.
 
 # Cache the ONNX model files inside the project so it's not scattered in the
 # user's global home directory, and so it survives if HOME changes.

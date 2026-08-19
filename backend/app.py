@@ -41,6 +41,33 @@ def _normalize_reply(reply):
     }
 
 
+def _safe_ask_gemini(prompt, **kwargs):
+    """Wraps ask_gemini() for the FOLLOW-UP calls inside /api/chat (memory
+    review reply, task/automation follow-up reply, plan auto-continuation
+    steps) — none of which were previously wrapped in any try/except.
+
+    Before this, if Gemini failed on any of those (rate limit, timeout,
+    safety block, bad model name, etc.) the whole request raised an
+    unhandled 500 — losing the reply that had ALREADY been generated and
+    saved earlier in the same request, with no graceful message to the
+    user at all.
+
+    Returns the normal ask_gemini() reply dict on success, or None on
+    failure (after logging) so callers can degrade gracefully instead of
+    crashing the request.
+
+    The FIRST ask_gemini call in api_chat() is intentionally NOT routed
+    through this helper — it needs to raise MissingAPIKeyError so that
+    call site's existing try/except can still return its dedicated 401
+    response.
+    """
+    try:
+        return ask_gemini(prompt, enable_tools=True, **kwargs)
+    except Exception as e:
+        print(f"[API Chat] Follow-up ask_gemini call failed: {e}")
+        return None
+
+
 def _get_or_create_secret_key() -> str:
     """A persistent secret key so login sessions survive server restarts."""
     SECRET_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -322,10 +349,17 @@ def create_app():
                 f"provided above. DO NOT output any <COMMAND> blocks.]"
             )
             memory_prompt = build_prompt(guided_message, long_term_context=long_term_context)
-            memory_reply = ask_gemini(memory_prompt, enable_tools=True)
-            memory_result = _normalize_reply(memory_reply)
-            response_text = memory_result["response"]
-            save_chat(f"[Memory Review] {history_user_message}", memory_result["response"])
+            memory_reply = _safe_ask_gemini(memory_prompt)
+            if memory_reply is None:
+                response_text = (
+                    "Memory mil gayi, but usse explain karte waqt Gemini se connect nahi ho paya. "
+                    "Ek baar phir se pooch lena."
+                )
+                save_chat(f"[Memory Review] {history_user_message}", response_text)
+            else:
+                memory_result = _normalize_reply(memory_reply)
+                response_text = memory_result["response"]
+                save_chat(f"[Memory Review] {history_user_message}", memory_result["response"])
         elif followup_context:
             guided_message = (
                 f"{prompt_user_message}\n\n[System Note: {followup_context}\n\n"
@@ -333,10 +367,17 @@ def create_app():
                 f"tasks, or the automation result above). DO NOT output any <COMMAND> block.]"
             )
             followup_prompt = build_prompt(guided_message)
-            followup_reply = ask_gemini(followup_prompt, enable_tools=True)
-            followup_result = _normalize_reply(followup_reply)
-            response_text = followup_result["response"]
-            save_chat(f"[Task Update] {history_user_message}", followup_result["response"])
+            followup_reply = _safe_ask_gemini(followup_prompt)
+            if followup_reply is None:
+                response_text = (
+                    "Kaam ho gaya hoga shayad, but result batate waqt Gemini se error aa gaya. "
+                    "Sessions/history check kar lena ya dobara pooch lena."
+                )
+                save_chat(f"[Task Update] {history_user_message}", response_text)
+            else:
+                followup_result = _normalize_reply(followup_reply)
+                response_text = followup_result["response"]
+                save_chat(f"[Task Update] {history_user_message}", followup_result["response"])
         else:
             response_text = result["response"]
 
@@ -374,7 +415,23 @@ def create_app():
                     f"already done, just tell the Admin the plan is complete.]"
                 )
                 step_prompt = build_prompt(continue_message)
-                step_reply = ask_gemini(step_prompt, enable_tools=True)
+                step_reply = _safe_ask_gemini(step_prompt)
+                if step_reply is None:
+                    # Gemini failed mid-plan. Stop auto-driving here instead
+                    # of crashing the whole request — everything generated
+                    # in earlier steps this request (in plan_response_parts)
+                    # is preserved and still returned to the user, plus a
+                    # note that the plan is paused rather than complete.
+                    plan_response_parts.append(
+                        f"(Step {step_idx + 1} pe Gemini se error aa gaya, plan yahin ruk gaya hai — "
+                        f"'continue' bolke dobara try kar sakte ho.)"
+                    )
+                    save_chat(
+                        f"[Plan Step {step_idx + 1}] {step_text}",
+                        "(Gemini call failed — plan paused)",
+                    )
+                    break
+
                 step_result = _normalize_reply(step_reply)
 
                 if step_result["response"]:

@@ -94,19 +94,40 @@ def _extract_summary(response):
 
 
 def create_summary(messages):
-    """Use Gemini to turn exactly five old exchanges into a summary."""
+    """Use Gemini to turn exactly five old exchanges into a summary.
+
+    Raises RuntimeError if Gemini never returns usable text after retries,
+    instead of silently returning None. The caller (short_term.py) only
+    deletes the raw exchanges AFTER a summary is successfully saved, so it's
+    critical this never returns a falsy value on failure — doing so used to
+    let None get saved as the summary while the raw chats were discarded,
+    losing that data permanently with no error surfaced anywhere.
+    """
     if len(messages) != 5:
         raise ValueError("A summary batch must contain exactly 5 exchanges.")
 
+    prompt = _build_summary_prompt(messages)
     last_error = None
 
-    prompt = _build_summary_prompt(messages)
     for attempt in range(2):
-        response_text = ask_gemini(prompt, model=GEMINI_MODEL)
-        summary = _normalize_summary_text(response_text)
+        try:
+            response_text = ask_gemini(prompt, model=GEMINI_MODEL)
+        except Exception as e:
+            last_error = e
+            print(f"[Summary Maker] Attempt {attempt + 1}/2 raised: {e}")
+            continue
 
+        summary = _normalize_summary_text(response_text)
         if summary:
             return summary
+
+        last_error = RuntimeError("Gemini returned empty/unusable summary text")
+        print(f"[Summary Maker] Attempt {attempt + 1}/2 produced no usable summary")
+
+    raise RuntimeError(
+        f"create_summary failed after 2 attempts, refusing to return an empty "
+        f"summary (last error: {last_error})"
+    )
 
 
 def _build_mega_summary_prompt(summaries):

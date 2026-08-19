@@ -22,14 +22,20 @@ def _long_term_file(user_id: str = None, is_guest: bool = None):
 
 def load_long_term_memories(user_id: str = None, is_guest: bool = None):
     """Load all long-term memory entries for the given user or current context."""
+    path = _long_term_file(user_id=user_id, is_guest=is_guest)
     try:
-        path = _long_term_file(user_id=user_id, is_guest=is_guest)
         if not os.path.exists(path):
             return []
 
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        # Was a bare `except: return []` — that silently treated ANY error
+        # (corrupt JSON, permissions, disk issues) as "no memories exist",
+        # with zero trace anywhere. At least log it now so a broken memory
+        # file shows up as a loud warning instead of quietly acting like
+        # the archive is empty.
+        print(f"[Long Term Mem Manager] Failed to load memories ({path}): {e}")
         return []
 
 
