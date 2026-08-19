@@ -1,5 +1,6 @@
 import os
 import secrets
+import time
 import uuid
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import re
 from flask import Flask, render_template, request, jsonify, url_for, session, redirect
 from werkzeug.utils import secure_filename
 
+from google.genai import errors as genai_errors
 from backend.gemini import ask_gemini, has_api_key, save_api_key, MissingAPIKeyError
 from backend.prompt_builder import build_prompt
 from backend.parser import process
@@ -305,6 +307,16 @@ def create_app():
             reply = ask_gemini(prompt, image_bytes=image_bytes, image_mime_type=image_mime_type, enable_tools=True)
         except MissingAPIKeyError as e:
             return jsonify({"error": "missing_api_key", "message": str(e)}), 401
+        except genai_errors.ClientError as e:
+            if getattr(e, "status_code", None) == 429 or "RESOURCE_EXHAUSTED" in str(e):
+                return jsonify({
+                    "error": "rate_limited",
+                    "message": "Gemini free-tier per-minute limit abhi hit ho gayi hai "
+                                "(daily quota alag cheez hai — AI Studio dashboard usually "
+                                "wahi dikhata hai). Thodi der (30-60 sec) ruk ke dobara try karein, "
+                                "ya Settings mein koi doosra model select karein."
+                }), 429
+            raise
 
         result = _normalize_reply(reply)
         save_chat(history_user_message, result["response"])
@@ -415,6 +427,8 @@ def create_app():
                     f"already done, just tell the Admin the plan is complete.]"
                 )
                 step_prompt = build_prompt(continue_message)
+                time.sleep(2)  # small gap so 8 back-to-back plan steps don't
+                                # blow the free-tier per-minute (RPM) limit
                 step_reply = _safe_ask_gemini(step_prompt)
                 if step_reply is None:
                     # Gemini failed mid-plan. Stop auto-driving here instead

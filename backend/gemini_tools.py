@@ -424,19 +424,15 @@ def build_tools(include_automation: bool, minecraft_active: bool = False) -> lis
 
     return [
         types.Tool(function_declarations=declarations),
-        # Built-in tools, combined with the custom function_declarations
-        # above (Gemini 3 models support mixing built-in + custom tools in
-        # the same request — no separate call needed). Both are read-only
-        # and safe for guests too, so they're not gated by include_automation.
-        #
-        # google_search: general web search grounding — the model decides
-        # on its own when a query needs current/external info and searches
-        # automatically, no explicit tool call from us required.
-        #
-        # url_context: reads the actual content of specific URL(s) the user
-        # or the conversation mentions (e.g. "check this GitHub repo:
-        # <link>", "what does this article say") instead of just searching
-        # for the URL's title/snippet.
-        types.Tool(google_search=types.GoogleSearch()),
-        types.Tool(url_context=types.UrlContext()),
+        # NOTE: google_search / url_context (Gemini's built-in grounding
+        # tools) were removed here — they run on a SEPARATE, much smaller
+        # quota than normal generate_content calls and are often billing-only
+        # (not covered by the free tier at all). Attaching them to every
+        # single request was silently eating into rate limits even on turns
+        # that never needed web search, causing 429 RESOURCE_EXHAUSTED
+        # errors that didn't show up in AI Studio's usage dashboard.
+        # Re-add only if you're on a paid tier and actually want live web
+        # search grounding:
+        #   types.Tool(google_search=types.GoogleSearch()),
+        #   types.Tool(url_context=types.UrlContext()),
     ]

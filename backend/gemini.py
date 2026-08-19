@@ -1,7 +1,9 @@
 import json
 import os
+import time
 from google import genai
 from google.genai import types
+from google.genai import errors as genai_errors
 
 from backend import settings_manager
 from backend import user_context
@@ -147,6 +149,32 @@ def _extract_text_from_response(response) -> str:
     return ""
 
 
+def _call_with_retry(fn, max_attempts: int = 4, base_delay: float = 8.0):
+    """Run a Gemini API call, retrying ONLY on 429 (RESOURCE_EXHAUSTED)
+    with exponential backoff (8s, 16s, 32s...). Free-tier models get
+    RPM (per-minute) limits that a burst of calls in one request — the
+    main reply + memory review + plan auto-continuation steps — can hit
+    even though the daily quota shown in AI Studio still looks fine.
+    Any other error (bad key, safety block, etc.) is raised immediately,
+    no point retrying those.
+    """
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except genai_errors.ClientError as e:
+            is_rate_limit = getattr(e, "status_code", None) == 429 \
+                or "RESOURCE_EXHAUSTED" in str(e)
+            if not is_rate_limit or attempt == max_attempts - 1:
+                raise
+            last_err = e
+            delay = base_delay * (2 ** attempt)
+            print(f"[Gemini] 429 rate limited, retrying in {delay:.0f}s "
+                  f"(attempt {attempt + 1}/{max_attempts})")
+            time.sleep(delay)
+    raise last_err
+
+
 def ask_gemini(
     prompt: str,
     model: str = None,
@@ -242,10 +270,12 @@ NOT a full dump):
         # never let the SDK try to auto-execute them.
         config["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
 
-    response = _get_client().models.generate_content(
-        model=model,
-        contents=contents,
-        config=config,
+    response = _call_with_retry(
+        lambda: _get_client().models.generate_content(
+            model=model,
+            contents=contents,
+            config=config,
+        )
     )
 
     model_text = _extract_text_from_response(response)
