@@ -3,7 +3,7 @@ requests           # backend/minecraft_manager.py <-> minecraft_bot/bot.js local
 edge-tts
 google-genai
 Werkzeug
-fastembed          # semantic (RAG) long-term memory search — ONNX-based, no torch
+fastembed          # semantic (RAG) long-term memory search — ONNX-based, no torch. Uses paraphrase-multilingual-MiniLM-L12-v2 (see backend/memory_manager/embeddings.py) for Hindi/Hinglish + English query matching.
 pyautogui
 pillow
 psutil
